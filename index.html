@@ -12,9 +12,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    
+    <!-- React & Babel for in-browser transpilation -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <style>
       body {
         font-family: 'Inter', sans-serif;
@@ -27,27 +33,412 @@
       .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
       .spinner { border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; width: 16px; height: 16px; animation: spin 1s ease-in-out infinite; }
       .streaming-cursor::after { content: '▋'; animation: blink 1s step-end infinite; margin-left: 2px; }
+      
       @keyframes spin { to { transform: rotate(360deg); } }
       @keyframes blink { 50% { opacity: 0; } }
-      .h-dynamic-screen { height: 100vh; height: calc(var(--vh, 1vh) * 100); }
+      
+      .h-dynamic-screen { min-height: 100vh; min-height: calc(var(--vh, 1vh) * 100); }
     </style>
-
-    <!-- Import maps para módulos ESM -->
-    <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "@google/genai": "https://esm.sh/@google/genai@^1.13.0",
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/"
-  }
-}
-</script>
   </head>
   <body class="bg-gray-900">
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    <script type="text/babel">
+      // --- Mock da GoogleGenAI para demonstração da UI no GitHub Pages ---
+      // Esta parte simula a resposta da IA para que o site funcione sem uma chave de API real.
+      const mockGoogleGenAI = {
+          models: {
+              async *generateContentStream({ contents }) {
+                  const lastMessage = contents[contents.length - 1];
+                  const lastPrompt = lastMessage.parts[0].text.toLowerCase();
+                  // Verifica se a última parte da mensagem contém dados de vídeo
+                  const hasVideo = lastMessage.parts.some(part => part.inlineData);
+                  let fullText;
+
+                  if (hasVideo) {
+                      if (lastPrompt.includes("resum")) {
+                           fullText = "Este é um resumo simulado do vídeo. A análise mostra uma pessoa discutindo um tópico de forma engajada. A resposta está sendo gerada em tempo real para você ver o efeito de streaming.";
+                      } else if (lastPrompt.trim() === "") {
+                           fullText = "Recebi o vídeo! O que você gostaria de saber sobre ele?";
+                      } else {
+                           fullText = `Analisando sua pergunta sobre o vídeo: "${lastPrompt}". A resposta está sendo gerada em tempo real.`;
+                      }
+                  } else {
+                       if (lastPrompt.trim() === "") {
+                           fullText = "Olá! Como posso te ajudar?";
+                       } else {
+                           fullText = `Recebi sua pergunta: "${lastPrompt}". Como uma IA de propósito geral, estou processando sua solicitação e trarei a resposta em instantes.`;
+                       }
+                  }
+                  
+                  const words = fullText.split(' ');
+                  for (const word of words) {
+                      await new Promise(resolve => setTimeout(resolve, 80));
+                      // A função text() é como o SDK real se comporta
+                      yield { text: () => word + ' ', candidates: [] };
+                  }
+              }
+          }
+      };
+
+      // --- Internationalization (i18n) ---
+      const translations = {
+        pt: {
+          title: 'LYNX AI',
+          description:
+            'Eu sou LYNX AI. Envie um vídeo para fazer perguntas sobre seu conteúdo, ou inicie uma conversa comigo. Eu posso pesquisar na web para obter mais informações e fornecer respostas com fontes.',
+          uploadButton: 'Enviar Vídeo',
+          videoUploadedButton: 'Vídeo Anexado',
+          loadedFile: (fileName) => `Carregado: ${fileName}`,
+          videoNotSupported: 'Seu navegador não suporta a tag de vídeo.',
+          initialChatMessage:
+            'Eu sou LYNX AI. Envie um vídeo para discuti-lo, ou simplesmente comece a conversar.',
+          promptPlaceholder: 'Pergunte sobre o vídeo...',
+          promptPlaceholderGeneral: 'Pergunte-me qualquer coisa...',
+          sendButton: 'Enviar',
+          ariaLabelAsk: 'Faça uma pergunta',
+          ariaLabelSend: 'Enviar pergunta',
+          ariaLabelRemoveVideo: 'Remover vídeo',
+          errorDefault: 'Ocorreu um erro inesperado. Por favor, tente novamente.',
+          sourcesTitle: 'Fontes',
+        },
+      };
+
+      const getLanguage = () => 'pt';
+      const currentLang = getLanguage();
+      const t = (key, ...args) => {
+        const template = translations[currentLang]?.[key] || translations.pt[key];
+        return typeof template === 'function' ? template(...args) : template;
+      };
+
+      // --- Ícones ---
+      const LogoIcon = () => (
+          <div className="flex items-center justify-center w-32 h-32">
+            <img
+              src="https://i.postimg.cc/nz9k0tMP/Logo-AI-PNG.png"
+              alt="LYNX AI Logo"
+              className="h-24 w-24 sm:h-28 sm:w-28"
+            />
+          </div>
+        );
+
+      const UploadIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24"
+          fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className="mr-2 h-5 w-5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+      );
+
+      const SendIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24"
+          fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className="h-5 w-5">
+          <line x1="22" y1="2" x2="11" y2="13" />
+          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+        </svg>
+      );
+      
+      const CloseIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+        </svg>
+      );
+
+      // --- Componente App ---
+      const App = () => {
+        const [videoFile, setVideoFile] = React.useState(null);
+        const [videoDataUrl, setVideoDataUrl] = React.useState(null);
+        const [stagedVideo, setStagedVideo] = React.useState(null);
+        const [prompt, setPrompt] = React.useState('');
+        const [chatHistory, setChatHistory] = React.useState([]);
+        const [isLoading, setIsLoading] = React.useState(false);
+        const [error, setError] = React.useState(null);
+        const fileInputRef = React.useRef(null);
+        const chatHistoryRef = React.useRef(null);
+
+        React.useLayoutEffect(() => {
+          const setVh = () => {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+          };
+          window.addEventListener('resize', setVh);
+          setVh();
+          return () => window.removeEventListener('resize', setVh);
+        }, []);
+
+        React.useEffect(() => {
+          if (chatHistoryRef.current) {
+            chatHistoryRef.current.scrollTop = chatHistoryRef.current.scrollHeight;
+          }
+        }, [chatHistory, isLoading]);
+
+        const handleFileChange = (event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            setVideoFile(file);
+            setError(null);
+            const reader = new FileReader();
+            reader.onload = () => {
+              const dataUrl = reader.result;
+              setVideoDataUrl(dataUrl);
+              setStagedVideo({ dataUrl, file });
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+
+        const handleSend = async () => {
+          if ((!prompt.trim() && !stagedVideo) || isLoading) return;
+
+          setIsLoading(true);
+          setError(null);
+
+          const userMessage = {
+            role: 'user',
+            text: prompt,
+            video: stagedVideo ? { dataUrl: stagedVideo.dataUrl, name: stagedVideo.file.name } : undefined,
+          };
+
+          const historyForApi = chatHistory
+            .filter(msg => (msg.text && msg.text.trim() !== '') || msg.role === 'model')
+            .map((msg) => ({
+              role: msg.role,
+              parts: [{ text: msg.text }],
+            }));
+
+          const userMessageForApi = {
+            role: 'user',
+            parts: [{ text: prompt }],
+          };
+          
+          if (stagedVideo) {
+            userMessageForApi.parts.push({
+              inlineData: {
+                mimeType: stagedVideo.file.type,
+                data: stagedVideo.dataUrl.split(',')[1],
+              },
+            });
+          }
+
+          const contents = [...historyForApi, userMessageForApi];
+
+          setChatHistory((prev) => [...prev, userMessage, { role: 'model', text: '' }]);
+          setPrompt('');
+          setStagedVideo(null);
+
+          try {
+            // Usando o MOCK da IA para demonstração
+            const ai = mockGoogleGenAI;
+
+            const stream = await ai.models.generateContentStream({
+              contents: contents,
+            });
+
+            let fullText = '';
+            for await (const chunk of stream) {
+              fullText += chunk.text() || '';
+
+              const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+              const sources = groundingChunks
+                ?.map((c) => c.web)
+                .filter((web) => web?.uri && web?.title);
+
+              setChatHistory((prev) => {
+                const newHistory = [...prev];
+                const lastMessage = newHistory[newHistory.length - 1];
+                if (lastMessage.role === 'model') {
+                  lastMessage.text = fullText;
+                  if (sources?.length) lastMessage.sources = sources;
+                }
+                return newHistory;
+              });
+            }
+          } catch (e) {
+            const errorMessage = e.message || t('errorDefault');
+            setError(errorMessage);
+            setChatHistory((prev) => prev.slice(0, -1));
+          } finally {
+            setIsLoading(false);
+          }
+        };
+
+        const triggerFileSelect = () => fileInputRef.current?.click();
+
+        const handleKeyDown = (event) => {
+          if (event.key === 'Enter' && !isLoading && (prompt.trim() || stagedVideo)) {
+            event.preventDefault();
+            handleSend();
+          }
+        };
+
+        return (
+          <div className="h-dynamic-screen w-full bg-gray-900 text-slate-200 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+            {/* Seção do Vídeo */}
+            <div className="w-full md:w-1/2 lg:w-3/5 flex flex-col p-4 sm:p-6 bg-gray-800">
+              <header className="mb-8 flex-shrink-0 flex flex-col items-center text-center">
+                  <LogoIcon />
+                  <h1 className="text-5xl sm:text-6xl font-extrabold text-slate-100 tracking-wide mt-4">
+                      LYNX <span className="text-purple-500">AI</span>
+                  </h1>
+                  <p className="text-base sm:text-lg text-slate-400 mt-3 max-w-lg">{t('description')}</p>
+              </header>
+
+              <input
+                type="file"
+                accept="video/*"
+                onChange={handleFileChange}
+                ref={fileInputRef}
+                className="hidden"
+              />
+
+              <div className="flex-grow flex flex-col items-center justify-center bg-gray-900 rounded-2xl w-full min-h-[200px] md:min-h-0 p-4">
+                {!videoDataUrl && (
+                  <button
+                    onClick={triggerFileSelect}
+                    className="flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                  >
+                    <UploadIcon />
+                    {t('uploadButton')}
+                  </button>
+                )}
+
+                {videoDataUrl && (
+                  <div className="w-full h-full flex flex-col items-center justify-center">
+                    <div className="w-full flex-grow relative mb-4">
+                        <video
+                          src={videoDataUrl}
+                          controls
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          className="w-full h-full object-contain rounded-xl absolute top-0 left-0"
+                        >
+                          {t('videoNotSupported')}
+                        </video>
+                    </div>
+                    <button
+                      onClick={triggerFileSelect}
+                      disabled={!!stagedVideo || isLoading}
+                      className="w-full max-w-sm flex items-center justify-center px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 flex-shrink-0 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                    >
+                      <UploadIcon />
+                      {stagedVideo ? t('videoUploadedButton') : t('uploadButton')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Seção do Chat */}
+            <div className="w-full md:w-1/2 lg:w-2/5 flex flex-col bg-gray-900 p-4 sm:p-6 border-t md:border-t-0 md:border-l border-slate-700">
+              <div ref={chatHistoryRef} className="flex-grow overflow-y-auto mb-4 custom-scrollbar pr-2">
+                {chatHistory.length === 0 && (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-slate-400 text-center">{t('initialChatMessage')}</p>
+                  </div>
+                )}
+                {chatHistory.map((message, index) => {
+                  const isLastMessage = index === chatHistory.length - 1;
+                  const isStreaming = isLoading && isLastMessage && message.role === 'model';
+                  return (
+                    <div
+                      key={index}
+                      className={`flex mb-4 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-xs lg:max-w-md rounded-2xl p-3 ${
+                          message.role === 'user'
+                            ? 'bg-blue-600 text-white rounded-br-none'
+                            : 'bg-gray-700 text-slate-200 rounded-bl-none'
+                        }`}
+                      >
+                        {message.video && (
+                          <div className={message.text ? 'mb-2' : ''}>
+                            <video src={message.video.dataUrl} className="w-48 max-w-full rounded-lg" muted playsInline />
+                            <p className="text-xs text-slate-200 text-center truncate mt-1 px-1" title={message.video.name}>
+                              {message.video.name}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {message.text && (
+                          <p className={`whitespace-pre-wrap text-sm ${isStreaming ? 'streaming-cursor' : ''}`}>
+                            {message.text}
+                          </p>
+                        )}
+
+                        {message.role === 'model' && message.sources && message.sources.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-600">
+                            <h4 className="font-semibold text-xs mb-1 text-slate-300">{t('sourcesTitle')}</h4>
+                            <ul className="space-y-1">
+                              {message.sources.map((source, i) => (
+                                <li key={i}>
+                                  <a
+                                    href={source.uri}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:text-blue-300 underline text-xs block truncate"
+                                    title={source.title}
+                                  >
+                                    {source.title}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex-shrink-0">
+                {stagedVideo && (
+                  <div className="relative mb-2 w-20 h-20 p-1 bg-gray-800 border border-slate-600 rounded-lg">
+                    <video src={stagedVideo.dataUrl} className="w-full h-full object-cover rounded" muted playsInline />
+                    <button 
+                      onClick={() => setStagedVideo(null)} 
+                      className="absolute -top-2 -right-2 bg-gray-600 hover:bg-gray-500 text-white rounded-full p-0.5 focus:outline-none ring-2 ring-gray-900"
+                      aria-label={t('ariaLabelRemoveVideo')}
+                    >
+                      <CloseIcon />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    className="w-full px-4 py-2 bg-gray-800 border border-slate-600 text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-700 disabled:cursor-not-allowed transition placeholder-slate-500"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={videoFile ? t('promptPlaceholder') : t('promptPlaceholderGeneral')}
+                    disabled={isLoading}
+                    aria-label={t('ariaLabelAsk')}
+                  />
+                  <button
+                    onClick={handleSend}
+                    className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed transition-all duration-200 flex-shrink-0"
+                    disabled={(!prompt.trim() && !stagedVideo) || isLoading}
+                    aria-label={t('ariaLabelSend')}
+                  >
+                    {isLoading ? <div className="spinner"></div> : <SendIcon />}
+                  </button>
+                </div>
+                {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const container = document.getElementById('root');
+      const root = ReactDOM.createRoot(container);
+      root.render(<App />);
+    </script>
   </body>
 </html>
