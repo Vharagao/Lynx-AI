@@ -1,6 +1,5 @@
 import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { GoogleGenAI } from '@google/genai';
 
 // --- Internationalization (i18n) ---
 const translations = {
@@ -21,6 +20,8 @@ const translations = {
     ariaLabelSend: 'Send question',
     ariaLabelRemoveVideo: 'Remove video',
     errorDefault: 'An unexpected error occurred. Please try again.',
+    errorServer: 'Failed to get response from server.',
+    errorStream: 'Failed to read stream from server.',
     sourcesTitle: 'Sources',
     systemInstruction:
       '**CRITICAL INSTRUCTIONS - FOLLOW THESE RULES:**\n\n1.  **Check for a video FIRST.**\n\n2.  **IF A VIDEO IS PROVIDED:**\n    a.  **Analyze the User\\\'s Prompt:**\n        i.  **Is the prompt CLEARLY asking about the video?** (e.g., "summarize this," "what is happening here?," "describe the video"). If YES, then analyze the video and provide a detailed answer.\n        ii. **Is the prompt CLEARLY a general question, unrelated to the video?** (e.g., "what is the capital of France?," "tell me a joke"). If YES, you MUST IGNORE the video completely. Just answer the question as a general AI assistant.\n        iii. **Is the prompt ambiguous, generic, or potentially unrelated?** (e.g., "hi," "undefined," a single word). If YES, DO NOT analyze the video. Instead, you MUST ask for clarification by responding ONLY with: "I see you\\\'ve uploaded a video. Did you want to ask something about it?"\n\n3.  **IF NO VIDEO IS PROVIDED:**\n    a.  Treat the conversation as a general chat.\n    b.  Respond helpfully and conversationally to any prompt. For a simple greeting like "hi", respond with a friendly greeting in return.\n\n4.  **General Rule:** If you use web search for any answer, you MUST cite your sources. Be helpful and friendly.',
@@ -42,6 +43,8 @@ const translations = {
     ariaLabelSend: 'Enviar pergunta',
     ariaLabelRemoveVideo: 'Remover vídeo',
     errorDefault: 'Ocorreu um erro inesperado. Por favor, tente novamente.',
+    errorServer: 'Falha ao obter resposta do servidor.',
+    errorStream: 'Falha ao ler o fluxo de dados do servidor.',
     sourcesTitle: 'Fontes',
     systemInstruction:
       '**INSTRUÇÕES CRÍTICAS - SIGA ESTAS REGRAS:**\n\n1.  **PRIMEIRO, verifique se um vídeo foi fornecido.**\n\n2.  **SE UM VÍDEO FOI FORNECIDO:**\n    a.  **Analise a Pergunta do Usuário:**\n        i.  **A pergunta é CLARAMENTE sobre o vídeo?** (Ex: "resuma isso", "o que está acontecendo aqui?", "descreva o vídeo"). Se SIM, analise o vídeo e forneça uma resposta detalhada.\n        ii. **A pergunta é CLARAMENTE uma questão geral, não relacionada ao vídeo?** (Ex: "qual a capital da França?", "conte-me uma piada"). Se SIM, você DEVE IGNORAR o vídeo completamente. Apenas responda à pergunta como um assistente de IA geral.\n        iii. **A pergunta é ambígua, genérica ou potencialmente não relacionada?** (Ex: "oi", "undefined", uma única palavra). Se SIM, NÃO analise o vídeo. Em vez disso, você DEVE pedir um esclarecimento, respondendo APENAS com: "Vejo que você enviou um vídeo. Gostaria de perguntar algo sobre ele?"\n\n3.  **SE NENHUM VÍDEO FOI FORNECIDO:**\n    a.  Trate a conversa como um chat geral.\n    b.  Responda de forma prestativa e conversacional a qualquer pergunta. Para uma saudação simples como "oi", responda com uma saudação amigável.\n\n4.  **Regra Geral:** Se você usar a busca na web para qualquer resposta, você DEVE citar suas fontes. Seja sempre prestativo e amigável.',
@@ -77,7 +80,7 @@ const LogoIcon = () => (
   );
 
 const UploadIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+  <svg xmlns="http://www.w.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
     fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
     className="mr-2 h-5 w-5">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -87,7 +90,7 @@ const UploadIcon = () => (
 );
 
 const SendIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+  <svg xmlns="http://www.w.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
     fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
     className="h-5 w-5">
     <line x1="22" y1="2" x2="11" y2="13" />
@@ -96,7 +99,7 @@ const SendIcon = () => (
 );
 
 const CloseIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+  <svg xmlns="http://www.w.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
   </svg>
 );
@@ -194,38 +197,58 @@ const App: React.FC = () => {
     setStagedVideo(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-      const stream = await ai.models.generateContentStream({
-        model: 'gemini-2.5-flash',
-        contents: contents,
-        config: {
-          systemInstruction: t('systemInstruction'),
-          temperature: 0.7,
-          tools: [{ googleSearch: {} }],
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          contents: contents,
+          systemInstruction: t('systemInstruction'),
+        }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || t('errorServer'));
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error(t('errorStream'));
+      }
+
+      const decoder = new TextDecoder();
       let fullText = '';
-      for await (const chunk of stream as any) {
-        fullText += chunk.text || '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        const sources = groundingChunks
-          ?.map((c: any) => c.web)
-          .filter((web: any) => web?.uri && web?.title) as
-          | { title: string; uri: string }[]
-          | undefined;
+        const chunkText = decoder.decode(value);
+        const lines = chunkText.split('\n\n').filter(line => line.startsWith('data: '));
 
-        setChatHistory((prev) => {
-          const newHistory = [...prev];
-          const lastMessage = newHistory[newHistory.length - 1];
-          if (lastMessage.role === 'model') {
-            lastMessage.text = fullText;
-            if (sources?.length) lastMessage.sources = sources;
+        for (const line of lines) {
+          const jsonString = line.replace('data: ', '');
+          if (!jsonString) continue;
+
+          try {
+            const parsed = JSON.parse(jsonString);
+            fullText += parsed.text || '';
+
+            setChatHistory((prev) => {
+              const newHistory = [...prev];
+              const lastMessage = newHistory[newHistory.length - 1];
+              if (lastMessage.role === 'model') {
+                lastMessage.text = fullText;
+                if (parsed.sources?.length) lastMessage.sources = parsed.sources;
+              }
+              return newHistory;
+            });
+          } catch (e) {
+            console.error("Failed to parse stream chunk:", jsonString);
           }
-          return newHistory;
-        });
+        }
       }
     } catch (e: any) {
       const errorMessage = e.message || t('errorDefault');
