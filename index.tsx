@@ -23,6 +23,12 @@ const translations = {
     errorServer: 'Failed to get response from server.',
     errorStream: 'Failed to read stream from server.',
     sourcesTitle: 'Sources',
+    uploadTab: 'Upload Video',
+    urlTab: 'Paste Video URL',
+    urlInputPlaceholder: 'Enter video URL...',
+    loadUrlButton: 'Load Video',
+    loadingVideo: 'Loading video...',
+    errorUrlLoad: 'Failed to load video from URL. Please check the link and try again.',
     systemInstruction:
       '**CRITICAL INSTRUCTIONS - FOLLOW THESE RULES:**\n\n1.  **Check for a video FIRST.**\n\n2.  **IF A VIDEO IS PROVIDED:**\n    a.  **Analyze the User\\\'s Prompt:**\n        i.  **Is the prompt CLEARLY asking about the video?** (e.g., "summarize this," "what is happening here?," "describe the video"). If YES, then analyze the video and provide a detailed answer.\n        ii. **Is the prompt CLEARLY a general question, unrelated to the video?** (e.g., "what is the capital of France?," "tell me a joke"). If YES, you MUST IGNORE the video completely. Just answer the question as a general AI assistant.\n        iii. **Is the prompt ambiguous, generic, or potentially unrelated?** (e.g., "hi," "undefined," a single word). If YES, DO NOT analyze the video. Instead, you MUST ask for clarification by responding ONLY with: "I see you\\\'ve uploaded a video. Did you want to ask something about it?"\n\n3.  **IF NO VIDEO IS PROVIDED:**\n    a.  Treat the conversation as a general chat.\n    b.  Respond helpfully and conversationally to any prompt. For a simple greeting like "hi", respond with a friendly greeting in return.\n\n4.  **General Rule:** If you use web search for any answer, you MUST cite your sources. Be helpful and friendly.',
   },
@@ -46,6 +52,12 @@ const translations = {
     errorServer: 'Falha ao obter resposta do servidor.',
     errorStream: 'Falha ao ler o fluxo de dados do servidor.',
     sourcesTitle: 'Fontes',
+    uploadTab: 'Enviar Vídeo',
+    urlTab: 'Colar URL do Vídeo',
+    urlInputPlaceholder: 'Digite a URL do vídeo...',
+    loadUrlButton: 'Carregar Vídeo',
+    loadingVideo: 'Carregando vídeo...',
+    errorUrlLoad: 'Falha ao carregar vídeo da URL. Verifique o link e tente novamente.',
     systemInstruction:
       '**INSTRUÇÕES CRÍTICAS - SIGA ESTAS REGRAS:**\n\n1.  **PRIMEIRO, verifique se um vídeo foi fornecido.**\n\n2.  **SE UM VÍDEO FOI FORNECIDO:**\n    a.  **Analise a Pergunta do Usuário:**\n        i.  **A pergunta é CLARAMENTE sobre o vídeo?** (Ex: "resuma isso", "o que está acontecendo aqui?", "descreva o vídeo"). Se SIM, analise o vídeo e forneça uma resposta detalhada.\n        ii. **A pergunta é CLARAMENTE uma questão geral, não relacionada ao vídeo?** (Ex: "qual a capital da França?", "conte-me uma piada"). Se SIM, você DEVE IGNORAR o vídeo completamente. Apenas responda à pergunta como um assistente de IA geral.\n        iii. **A pergunta é ambígua, genérica ou potencialmente não relacionada?** (Ex: "oi", "undefined", uma única palavra). Se SIM, NÃO analise o vídeo. Em vez disso, você DEVE pedir um esclarecimento, respondendo APENAS com: "Vejo que você enviou um vídeo. Gostaria de perguntar algo sobre ele?"\n\n3.  **SE NENHUM VÍDEO FOI FORNECIDO:**\n    a.  Trate a conversa como um chat geral.\n    b.  Responda de forma prestativa e conversacional a qualquer pergunta. Para uma saudação simples como "oi", responda com uma saudação amigável.\n\n4.  **Regra Geral:** Se você usar a busca na web para qualquer resposta, você DEVE citar suas fontes. Seja sempre prestativo e amigável.',
   },
@@ -80,7 +92,7 @@ const LogoIcon = () => (
   );
 
 const UploadIcon = () => (
-  <svg xmlns="http://www.w.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
     fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
     className="mr-2 h-5 w-5">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -90,7 +102,7 @@ const UploadIcon = () => (
 );
 
 const SendIcon = () => (
-  <svg xmlns="http://www.w.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
     fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
     className="h-5 w-5">
     <line x1="22" y1="2" x2="11" y2="13" />
@@ -99,7 +111,7 @@ const SendIcon = () => (
 );
 
 const CloseIcon = () => (
-  <svg xmlns="http://www.w.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
   </svg>
 );
@@ -116,7 +128,6 @@ interface ChatMessage {
 
 // --- App Component ---
 const App: React.FC = () => {
-  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoDataUrl, setVideoDataUrl] = useState<string | null>(null);
   const [stagedVideo, setStagedVideo] = useState<{ dataUrl: string; file: File } | null>(null);
   const [prompt, setPrompt] = useState<string>('');
@@ -125,6 +136,9 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatHistoryRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<'upload' | 'url'>('upload');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
 
   useLayoutEffect(() => {
     const setVh = () => {
@@ -145,7 +159,6 @@ const App: React.FC = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setVideoFile(file);
       setError(null);
       const reader = new FileReader();
       reader.onload = () => {
@@ -154,6 +167,41 @@ const App: React.FC = () => {
         setStagedVideo({ dataUrl, file });
       };
       reader.readAsDataURL(file);
+    }
+  };
+  
+  const handleLoadFromUrl = async () => {
+    if (!videoUrl.trim()) return;
+    setIsLoadingVideo(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/proxy-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: videoUrl }),
+      });
+      if (!response.ok) {
+        throw new Error(t('errorUrlLoad'));
+      }
+      const { base64Data, mimeType } = await response.json();
+      const dataUrl = `data:${mimeType};base64,${base64Data}`;
+      
+      const byteString = atob(base64Data);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mimeType });
+      const fileName = videoUrl.substring(videoUrl.lastIndexOf('/') + 1) || 'video.mp4';
+      const file = new File([blob], fileName, { type: mimeType });
+
+      setVideoDataUrl(dataUrl);
+      setStagedVideo({ dataUrl, file });
+    } catch (e: any) {
+      setError(e.message || t('errorUrlLoad'));
+    } finally {
+      setIsLoadingVideo(false);
     }
   };
 
@@ -267,6 +315,14 @@ const App: React.FC = () => {
       handleSend();
     }
   };
+  
+  const handleUrlKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter' && !isLoadingVideo) {
+      event.preventDefault();
+      handleLoadFromUrl();
+    }
+  };
+
 
   return (
     <div className="h-dynamic-screen w-full bg-gray-900 text-slate-200 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
@@ -288,15 +344,45 @@ const App: React.FC = () => {
           className="hidden"
         />
 
-        <div className="flex-grow flex flex-col items-center justify-center bg-gray-900 rounded-2xl w-full min-h-[200px] md:min-h-0 p-4">
+        <div className="flex-grow flex flex-col items-center justify-center bg-gray-900 rounded-2xl w-full min-h-[250px] md:min-h-0 p-4">
           {!videoDataUrl && (
-            <button
-              onClick={triggerFileSelect}
-              className="flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
-            >
-              <UploadIcon />
-              {t('uploadButton')}
-            </button>
+            <div className="w-full max-w-md">
+              <div className="flex border-b border-gray-700">
+                <button onClick={() => setActiveTab('upload')} className={`flex-1 py-2 text-sm font-medium ${activeTab === 'upload' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400 hover:text-slate-200'}`}>{t('uploadTab')}</button>
+                <button onClick={() => setActiveTab('url')} className={`flex-1 py-2 text-sm font-medium ${activeTab === 'url' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400 hover:text-slate-200'}`}>{t('urlTab')}</button>
+              </div>
+              <div className="pt-6">
+                {activeTab === 'upload' && (
+                  <button
+                    onClick={triggerFileSelect}
+                    className="w-full flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                  >
+                    <UploadIcon />
+                    {t('uploadButton')}
+                  </button>
+                )}
+                {activeTab === 'url' && (
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                      onKeyDown={handleUrlKeyDown}
+                      placeholder={t('urlInputPlaceholder')}
+                      className="w-full px-4 py-2 bg-gray-800 border border-slate-600 text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition placeholder-slate-500"
+                      disabled={isLoadingVideo}
+                    />
+                    <button
+                      onClick={handleLoadFromUrl}
+                      disabled={isLoadingVideo}
+                      className="w-full flex items-center justify-center px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 disabled:bg-indigo-800 disabled:cursor-wait"
+                    >
+                      {isLoadingVideo ? t('loadingVideo') : t('loadUrlButton')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {videoDataUrl && (
@@ -315,12 +401,11 @@ const App: React.FC = () => {
                   </video>
               </div>
               <button
-                onClick={triggerFileSelect}
+                onClick={() => { setVideoDataUrl(null); setStagedVideo(null); setVideoUrl(''); }}
                 disabled={!!stagedVideo || isLoading}
-                className="w-full max-w-sm flex items-center justify-center px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 flex-shrink-0 disabled:bg-blue-800 disabled:cursor-not-allowed"
+                className="w-full max-w-sm flex items-center justify-center px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 flex-shrink-0"
               >
-                <UploadIcon />
-                {stagedVideo ? t('videoUploadedButton') : t('uploadButton')}
+                {t('uploadButton')}
               </button>
             </div>
           )}
@@ -411,7 +496,7 @@ const App: React.FC = () => {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={videoFile ? t('promptPlaceholder') : t('promptPlaceholderGeneral')}
+              placeholder={videoDataUrl ? t('promptPlaceholder') : t('promptPlaceholderGeneral')}
               disabled={isLoading}
               aria-label={t('ariaLabelAsk')}
             />
